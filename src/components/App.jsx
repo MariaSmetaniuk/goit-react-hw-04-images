@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { GlobalStyle } from './GlobalStyle';
 import { GetImages } from '../services/api';
 import { Searchbar } from './Searchbar/Searchbar';
@@ -9,129 +9,108 @@ import { Notification } from './Notification/Notification';
 import { LoadMoreButton } from './Button/Button';
 import { AppContainer } from './App.styled';
 
-export class App extends Component {
-  state = {
-    query: null,
-    cards: [],
-    page: 1,
-    per_page: 12,
-    totalPages: 0,
-    isLoading: false,
-    modal: {
-      status: false,
-      content: '',
-    },
-    error: {
-      status: false,
-      message: '',
-    },
-  };
+export const App = () => {
+  const [query, setQuery] = useState('');
+  const [cards, setCards] = useState([]);
+  const [page, setPage] = useState(1);
+  const [per_page] = useState(12);
+  const [totalPages, setTotalPages] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [modal, setModal] = useState({
+    status: false,
+    content: '',
+  });
+  const [error, setError] = useState({
+    status: false,
+    message: '',
+  });
 
-  componentDidUpdate(_, prevState) {
-    const { query, page } = this.state;
-    if (prevState.query !== query || prevState.page !== page) {
-      this.handleFetchImages();
+  const firstRender = useRef(true);
+
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
     }
-  }
+    handleFetchImages(query, page, per_page);
+  }, [page, per_page, query]);
 
-  handleFetchImages = async () => {
-    const { query, page, per_page } = this.state;
+  const handleFetchImages = async (query, page, per_page) => {
     try {
-      this.setState({ isLoading: true });
+      setIsLoading(true);
 
       const data = await GetImages(query, page, per_page);
 
       if (data.hits.length === 0) {
-        this.setState({
-          error: {
-            status: true,
-            message: `Sorry, there are no images matching ${query}. Please try again.`,
-          },
+        setError({
+          status: true,
+          message: `Sorry, there are no images matching ${query}. Please try again.`,
         });
         return;
       }
 
       const totalPages = Math.ceil(data.totalHits / per_page);
 
-      this.setState(prevState => {
-        return {
-          cards: [...prevState.cards, ...data.hits],
-          totalPages,
-        };
-      });
+      setCards(prev => [...prev, ...data.hits]);
+      setTotalPages(totalPages);
     } catch (error) {
-      this.setState({
-        error: {
-          status: true,
-          message: 'Something went wrong :( Please try again later!',
-        },
+      setError({
+        status: true,
+        message: 'Something went wrong :( Please try again later!',
       });
     } finally {
-      this.setState({ isLoading: false });
+      setIsLoading(false);
     }
   };
 
-  handleLoadMore = () => {
-    this.setState(prevState => {
-      return { page: prevState.page + 1 };
+  const handleLoadMore = () => {
+    setPage(prev => prev + 1);
+  };
+
+  const handleOpenModal = cardId => {
+    const currentCard = cards.find(card => card.id === cardId);
+
+    setModal({
+      status: true,
+      content: currentCard.largeImageURL,
     });
   };
 
-  handleSubmit = query => {
-    this.setState({
-      cards: [],
-      query,
-      page: 1,
-      error: {
-        status: false,
-        message: '',
-      },
+  const handleCloseModal = () => {
+    setModal({
+      status: false,
+      content: '',
     });
   };
 
-  handleOpenModal = cardId => {
-    const currentCard = this.state.cards.find(card => card.id === cardId);
-
-    this.setState({
-      modal: {
-        status: true,
-        content: currentCard.largeImageURL,
-      },
+  const handleSubmit = query => {
+    setQuery(query);
+    setCards([]);
+    setPage(1);
+    setError({
+      status: false,
+      message: '',
     });
   };
 
-  handleCloseModal = () => {
-    this.setState({
-      modal: {
-        status: false,
-        content: '',
-      },
-    });
-  };
+  const isCards = cards.length > 0;
+  const isModalOpen = modal.status;
+  const modalContent = modal.content;
+  const showError = error.status && !isLoading;
+  const errorMessage = error.message;
+  const buttonVisible = isCards && page < totalPages && !isLoading;
 
-  render() {
-    const { cards, page, totalPages, isLoading, modal, error } = this.state;
-    const { handleSubmit, handleOpenModal, handleCloseModal, handleLoadMore } =
-      this;
-    const isCards = cards.length > 0;
-    const isModalOpen = modal.status;
-    const modalContent = modal.content;
-    const showError = error.status && !isLoading;
-    const errorMessage = error.message;
-    const buttonVisible = isCards && page < totalPages && !isLoading;
-
-    return (
-      <AppContainer>
-        <Searchbar onSubmit={handleSubmit} />
-        {showError && <Notification message={errorMessage} />}
-        {isCards && <ImageGallery cards={cards} openModal={handleOpenModal} />}
-        {isLoading && <Loader />}
-        {buttonVisible && <LoadMoreButton onClick={handleLoadMore} />}
-        {isModalOpen && (
-          <Modal largeImageURL={modalContent} closeModal={handleCloseModal} />
-        )}
-        <GlobalStyle />
-      </AppContainer>
-    );
-  }
-}
+  return (
+    <AppContainer>
+      <Searchbar onSubmit={handleSubmit} />
+      {showError && <Notification message={errorMessage} />}
+      {isCards && <ImageGallery cards={cards} openModal={handleOpenModal} />}
+      {isLoading && <Loader />}
+      {buttonVisible && <LoadMoreButton onClick={handleLoadMore} />}
+      {isModalOpen && (
+        <Modal largeImageURL={modalContent} closeModal={handleCloseModal} />
+      )}
+      <GlobalStyle />
+    </AppContainer>
+  );
+};
